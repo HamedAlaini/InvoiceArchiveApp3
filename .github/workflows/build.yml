@@ -17,10 +17,12 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    - name: Unzip and Build
+    - name: Unzip source code
+      run: unzip InvoiceArchiveAndroid_Source.zip
+    
+    - name: Generate Wrapper and Build
       run: |
-        unzip InvoiceArchiveAndroid_Source.zip
-        cd $(dirname $(find . -name "settings.gradle.kts" | head -n 1))
+        gradle wrapper
         chmod +x gradlew
         ./gradlew assembleDebug
 
