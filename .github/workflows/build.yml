@@ -2,32 +2,57 @@ name: Android CI
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Set up JDK 17
-      uses: actions/setup-java@v4
-      with:
-        java-version: '17'
-        distribution: 'temurin'
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Unzip source code
-      run: unzip InvoiceArchiveAndroid_Source.zip
-    
-    - name: Generate Wrapper and Build
-      run: |
-        gradle wrapper
-        chmod +x gradlew
-        ./gradlew assembleDebug -Pkotlin.jvm.target.validation.mode=warning
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: "temurin"
 
-    - name: Upload APK
-      uses: actions/upload-artifact@v4
-      with:
-        name: app-debug
-        path: '**/*.apk'
+      - name: Extract project
+        run: |
+          unzip -o InvoiceArchiveAndroid_Source.zip -d extracted
+          find extracted -type f \( -name "settings.gradle" -o -name "settings.gradle.kts" \)
+
+      - name: Locate Gradle project
+        run: |
+          PROJECT_DIR="$(dirname "$(find "$GITHUB_WORKSPACE/extracted" -type f \( -name settings.gradle -o -name settings.gradle.kts \) -print -quit)")"
+          if [ -z "$PROJECT_DIR" ] || [ "$PROJECT_DIR" = "." ]; then
+            echo "ERROR: Gradle settings file not found in ZIP."
+            exit 1
+          fi
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+          echo "Project directory: $PROJECT_DIR"
+          ls -la "$PROJECT_DIR"
+
+      - name: Generate Gradle Wrapper
+        working-directory: extracted
+        run: |
+          PROJECT_DIR="$(dirname "$(find "$GITHUB_WORKSPACE/extracted" -type f \( -name settings.gradle -o -name settings.gradle.kts \) -print -quit)")"
+          cd "$PROJECT_DIR"
+          gradle wrapper --gradle-version 8.9
+
+      - name: Build debug APK
+        working-directory: extracted
+        run: |
+          cd "$PROJECT_DIR"
+          chmod +x gradlew
+          ./gradlew assembleDebug --stacktrace
+
+      - name: Upload APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug
+          path: extracted/**/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
